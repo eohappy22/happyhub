@@ -1,665 +1,611 @@
+-- ============================================================
+--  TradeVisual Script  |  Refatorado e corrigido
+-- ============================================================
+
+-- ── Constantes de cor ──────────────────────────────────────
+local C = {
+	BG          = Color3.fromRGB(10, 10, 10),
+	PANEL       = Color3.fromRGB(16, 16, 16),
+	STROKE      = Color3.fromRGB(45, 45, 45),
+	BTN_DARK    = Color3.fromRGB(22, 22, 22),
+	BTN_MUT     = Color3.fromRGB(45, 20, 70),
+	BTN_GREEN   = Color3.fromRGB(0, 130, 0),
+	BTN_RED     = Color3.fromRGB(100, 0, 0),
+	BTN_BLUE    = Color3.fromRGB(0, 50, 140),
+	BTN_PURPLE  = Color3.fromRGB(50, 40, 120),
+	BTN_DKRED   = Color3.fromRGB(120, 0, 0),
+	MUT_ON      = Color3.fromRGB(40, 80, 40),
+	MUT_OFF     = Color3.fromRGB(20, 20, 20),
+	WHITE       = Color3.new(1, 1, 1),
+	GRAY        = Color3.fromRGB(120, 120, 120),
+	RED         = Color3.fromRGB(255, 60, 60),
+	GREEN_TEXT  = Color3.fromRGB(120, 255, 120),
+	LGRAY       = Color3.fromRGB(180, 180, 180),
+}
+
+local MAX_MUTATIONS = 11
+
+-- ── Helpers de criação de UI ───────────────────────────────
+
+local function addCorner(parent, radius)
+	local c = Instance.new("UICorner", parent)
+	c.CornerRadius = UDim.new(0, radius or 6)
+	return c
+end
+
+local function addStroke(parent, color)
+	local s = Instance.new("UIStroke", parent)
+	s.Color = color or C.STROKE
+	return s
+end
+
+local function makeFrame(props)
+	local f = Instance.new("Frame")
+	for k, v in pairs(props) do f[k] = v end
+	return f
+end
+
+local function makeLabel(props)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	for k, v in pairs(props) do l[k] = v end
+	return l
+end
+
+local function makeButton(parent, props)
+	local b = Instance.new("TextButton")
+	b.Parent = parent
+	b.Font = Enum.Font.GothamBlack
+	b.TextColor3 = C.WHITE
+	b.AutoButtonColor = false
+	for k, v in pairs(props) do b[k] = v end
+	addCorner(b, 6)
+	return b
+end
+
+local function makeTextBox(parent, props)
+	local tb = Instance.new("TextBox")
+	tb.Parent = parent
+	tb.BackgroundColor3 = C.PANEL
+	tb.Font = Enum.Font.GothamBold
+	tb.TextColor3 = C.WHITE
+	tb.TextSize = 12
+	tb.ClearTextOnFocus = false
+	tb.PlaceholderColor3 = Color3.fromRGB(90, 90, 90)
+	for k, v in pairs(props) do tb[k] = v end
+	addCorner(tb, 6)
+	return tb
+end
+
+local function setStatus(label, text, color)
+	label.Text = text
+	label.TextColor3 = color or C.WHITE
+end
+
+-- ── Raiz ───────────────────────────────────────────────────
+
 local gui = Instance.new("ScreenGui")
 gui.Name = "TradeVisual"
+gui.ResetOnSpawn = false
 gui.Parent = game.CoreGui
 
--- MAIN FRAME
+-- ============================================================
+--  ESTADO GLOBAL
+-- ============================================================
 
-local main = Instance.new("Frame")
-main.Parent = gui
-main.Size = UDim2.new(0,305,0,235)
-main.Position = UDim2.new(0.5,-152,0.5,-117)
-main.BackgroundColor3 = Color3.fromRGB(10,10,10)
-main.BorderSizePixel = 0
-main.Active = true
-main.Draggable = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
+local selectedMutations = {}   -- { [mutationName] = true }
 
-local stroke = Instance.new("UIStroke", main)
-stroke.Color = Color3.fromRGB(45,45,45)
+-- ============================================================
+--  PAINEL PRINCIPAL (aba SPAWN)
+-- ============================================================
 
--- TITLE
+local main = makeFrame({
+	Parent          = gui,
+	Name            = "MainFrame",
+	Size            = UDim2.new(0, 305, 0, 235),
+	Position        = UDim2.new(0.5, -152, 0.5, -117),
+	BackgroundColor3 = C.BG,
+	BorderSizePixel = 0,
+	Active          = true,
+	Draggable       = true,
+})
+addCorner(main, 12)
+addStroke(main)
 
-local title = Instance.new("TextLabel")
-title.Parent = main
-title.BackgroundTransparency = 1
-title.Size = UDim2.new(1,0,0,30)
-title.Position = UDim2.new(0,0,0,6)
-title.Font = Enum.Font.GothamBlack
-title.Text = "Trade Visual Script"
-title.TextColor3 = Color3.new(1,1,1)
-title.TextSize = 18
+-- Barra de abas (presente no main e replicada nas outras telas via tabs compartilhadas)
+makeLabel({
+	Parent        = main,
+	Size          = UDim2.new(1, 0, 0, 30),
+	Position      = UDim2.new(0, 0, 0, 6),
+	Font          = Enum.Font.GothamBlack,
+	Text          = "Trade Visual Script",
+	TextColor3    = C.WHITE,
+	TextSize      = 18,
+})
 
--- TABS
-
-local tabs = Instance.new("Frame")
-tabs.Parent = main
-tabs.BackgroundTransparency = 1
-tabs.Position = UDim2.new(0,12,0,42)
-tabs.Size = UDim2.new(1,-24,0,28)
-
-local layout = Instance.new("UIListLayout", tabs)
-layout.FillDirection = Enum.FillDirection.Horizontal
-layout.Padding = UDim.new(0,6)
+-- Tabs
+local tabsFrame = makeFrame({
+	Parent              = main,
+	BackgroundTransparency = 1,
+	Position            = UDim2.new(0, 12, 0, 42),
+	Size                = UDim2.new(1, -24, 0, 28),
+})
+local tabLayout = Instance.new("UIListLayout", tabsFrame)
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 6)
 
 local function makeTab(txt)
-	local b = Instance.new("TextButton")
-	b.Parent = tabs
-	b.Size = UDim2.new(0,62,1,0)
-	b.BackgroundColor3 = Color3.fromRGB(22,22,22)
-	b.Text = txt
-	b.Font = Enum.Font.GothamBlack
-	b.TextColor3 = Color3.new(1,1,1)
-	b.TextSize = 11
-	b.AutoButtonColor = false
-	Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
-	return b
+	return makeButton(tabsFrame, {
+		Size             = UDim2.new(0, 62, 1, 0),
+		BackgroundColor3 = C.BTN_DARK,
+		Text             = txt,
+		TextSize         = 11,
+	})
 end
 
-local spawnTab = makeTab("SPAWN")
-local tradeTab = makeTab("TRADE")
-local dupeTab = makeTab("DUPE")
+local spawnTab    = makeTab("SPAWN")
+local tradeTab    = makeTab("TRADE")
+local dupeTab     = makeTab("DUPE")
 local settingsTab = makeTab("SETTINGS")
 
--- LABEL
+-- Label "Animal to spawn"
+makeLabel({
+	Parent           = main,
+	Position         = UDim2.new(0, 12, 0, 76),
+	Size             = UDim2.new(0, 150, 0, 16),
+	Font             = Enum.Font.GothamBold,
+	Text             = "ANIMAL TO SPAWN",
+	TextColor3       = C.GRAY,
+	TextSize         = 11,
+	TextXAlignment   = Enum.TextXAlignment.Left,
+})
 
-local lbl = Instance.new("TextLabel")
-lbl.Parent = main
-lbl.BackgroundTransparency = 1
-lbl.Position = UDim2.new(0,12,0,76)
-lbl.Size = UDim2.new(0,150,0,16)
-lbl.Font = Enum.Font.GothamBold
-lbl.Text = "ANIMAL TO SPAWN"
-lbl.TextColor3 = Color3.fromRGB(120,120,120)
-lbl.TextSize = 11
-lbl.TextXAlignment = Enum.TextXAlignment.Left
+-- TextBox de nome do animal
+local animalBox = makeTextBox(main, {
+	Position = UDim2.new(0, 12, 0, 95),
+	Size     = UDim2.new(0, 200, 0, 24),
+	Text     = "Antonio",
+})
 
--- TEXTBOX
+-- Botão Traits & Mut
+local traitsBtn = makeButton(main, {
+	Position         = UDim2.new(0, 220, 0, 95),
+	Size             = UDim2.new(0, 72, 0, 24),
+	BackgroundColor3 = C.BTN_MUT,
+	Text             = "TRAITS &\nMUT",
+	TextColor3       = Color3.fromRGB(190, 120, 255),
+	TextSize         = 8,
+})
 
-local box = Instance.new("TextBox")
-box.Parent = main
-box.Position = UDim2.new(0,12,0,95)
-box.Size = UDim2.new(0,200,0,24)
-box.BackgroundColor3 = Color3.fromRGB(16,16,16)
-box.Text = "Antonio"
-box.Font = Enum.Font.GothamBold
-box.TextColor3 = Color3.new(1,1,1)
-box.TextSize = 12
-box.ClearTextOnFocus = false
+-- Status
+local spawnStatus = makeLabel({
+	Parent        = main,
+	Position      = UDim2.new(0, 10, 0, 138),
+	Size          = UDim2.new(1, -20, 0, 32),
+	Font          = Enum.Font.GothamBlack,
+	Text          = "NO EMPTY PODIUMS!",
+	TextColor3    = Color3.fromRGB(255, 40, 40),
+	TextSize      = 10,
+	TextWrapped   = true,
+	TextYAlignment = Enum.TextYAlignment.Top,
+})
 
-Instance.new("UICorner", box).CornerRadius = UDim.new(0,5)
+-- Botões de ação
+local spawnBtn = makeButton(main, {
+	Position         = UDim2.new(0, 12, 0, 170),
+	Size             = UDim2.new(0, 132, 0, 28),
+	BackgroundColor3 = C.BTN_GREEN,
+	Text             = "SPAWN VISUAL",
+	TextSize         = 13,
+})
 
--- TRAITS BUTTON
+local clearBtn = makeButton(main, {
+	Position         = UDim2.new(0, 160, 0, 170),
+	Size             = UDim2.new(0, 132, 0, 28),
+	BackgroundColor3 = C.BTN_RED,
+	Text             = "CLEAR ALL",
+	TextSize         = 13,
+})
 
-local traits = Instance.new("TextButton")
-traits.Parent = main
-traits.Position = UDim2.new(0,220,0,95)
-traits.Size = UDim2.new(0,72,0,24)
-traits.BackgroundColor3 = Color3.fromRGB(45,20,70)
-traits.Text = "TRAITS &\nMUT"
-traits.Font = Enum.Font.GothamBlack
-traits.TextColor3 = Color3.fromRGB(190,120,255)
-traits.TextSize = 8
+local saveCfgBtn = makeButton(main, {
+	Position         = UDim2.new(0, 12, 0, 203),
+	Size             = UDim2.new(0, 132, 0, 28),
+	BackgroundColor3 = C.BTN_BLUE,
+	Text             = "SAVE CONFIG",
+	TextSize         = 13,
+})
 
-Instance.new("UICorner", traits).CornerRadius = UDim.new(0,5)
+local deleteCfgBtn = makeButton(main, {
+	Position         = UDim2.new(0, 160, 0, 203),
+	Size             = UDim2.new(0, 132, 0, 28),
+	BackgroundColor3 = C.BTN_RED,
+	Text             = "DELETE CONFIG",
+	TextSize         = 13,
+})
 
--- STATUS
-
-local status = Instance.new("TextLabel")
-status.Parent = main
-status.BackgroundTransparency = 1
-status.Position = UDim2.new(0,10,0,138)
-status.Size = UDim2.new(1,-20,0,32)
-status.Font = Enum.Font.GothamBlack
-status.Text = "NO EMPTY PODIUMS!"
-status.TextColor3 = Color3.fromRGB(255,40,40)
-status.TextSize = 10
-status.TextWrapped = true
-status.TextYAlignment = Enum.TextYAlignment.Top
-
--- BUTTON FUNCTION
-
-local function makeButton(txt,color,x,y)
-	local b = Instance.new("TextButton")
-	b.Parent = main
-	b.Position = UDim2.new(0,x,0,y)
-	b.Size = UDim2.new(0,132,0,28)
-	b.BackgroundColor3 = color
-	b.Text = txt
-	b.Font = Enum.Font.GothamBlack
-	b.TextColor3 = Color3.new(1,1,1)
-	b.TextSize = 13
-	b.AutoButtonColor = false
-	Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
-	return b
-end
-
-local spawn = makeButton(
-	"SPAWN VISUAL",
-	Color3.fromRGB(0,130,0),
-	12,
-	170
-)
-
-spawn.MouseButton1Click:Connect(function()
-
-	status.Text = "É necessário um pet de tier alto na base. Ex: Garama, Dragon Cannelloni."
-	status.TextColor3 = Color3.fromRGB(255,60,60)
-
-end)
-local spawn = makeButton("SPAWN VISUAL",Color3.fromRGB(0,130,0),12,170)
-
-local clear = makeButton("CLEAR ALL",Color3.fromRGB(100,0,0),160,170)
-
-local savecfg = makeButton("SAVE CONFIG",Color3.fromRGB(0,50,140),12,203)
-
-local deletecfg = makeButton("DELETE CONFIG",Color3.fromRGB(100,0,0),160,203)
-
-spawn.MouseButton1Click:Connect(function()
-
-	status.Text = "É necessário um pet de tier alto na base. Ex: Garama, Dragon Cannelloni."
-	status.TextColor3 = Color3.fromRGB(255,60,60)
-
+-- Callbacks do painel principal
+spawnBtn.MouseButton1Click:Connect(function()
+	setStatus(spawnStatus,
+		"É necessário um pet de tier alto na base. Ex: Garama, Dragon Cannelloni.",
+		C.RED)
 end)
 
-clear.MouseButton1Click:Connect(function()
-
-	status.Text = "Visuais removidos."
-	status.TextColor3 = Color3.fromRGB(255,255,255)
-
+clearBtn.MouseButton1Click:Connect(function()
+	setStatus(spawnStatus, "Visuais removidos.", C.WHITE)
 end)
 
-savecfg.MouseButton1Click:Connect(function()
-
-	status.Text = "Configuração salva com sucesso."
-	status.TextColor3 = Color3.fromRGB(120,255,120)
-
+saveCfgBtn.MouseButton1Click:Connect(function()
+	setStatus(spawnStatus, "Configuração salva com sucesso.", C.GREEN_TEXT)
 end)
 
-deletecfg.MouseButton1Click:Connect(function()
-
-	status.Text = "Configuração removida."
-	status.TextColor3 = Color3.fromRGB(255,80,80)
-
+deleteCfgBtn.MouseButton1Click:Connect(function()
+	setStatus(spawnStatus, "Configuração removida.", Color3.fromRGB(255, 80, 80))
 end)
 
--- TRADE MENU
+-- ============================================================
+--  PAINEL TRADE
+-- ============================================================
 
-local tradeMenu = Instance.new("Frame")
-tradeMenu.Parent = gui
-tradeMenu.Size = UDim2.new(0,305,0,250)
-tradeMenu.Position = UDim2.new(0.5,-152,0.5,-125)
-tradeMenu.BackgroundColor3 = Color3.fromRGB(10,10,10)
-tradeMenu.Visible = false
-tradeMenu.Active = true
-tradeMenu.Draggable = true
+local tradeMenu = makeFrame({
+	Parent           = gui,
+	Name             = "TradeMenu",
+	Size             = UDim2.new(0, 305, 0, 250),
+	Position         = UDim2.new(0.5, -152, 0.5, -125),
+	BackgroundColor3 = C.BG,
+	Visible          = false,
+	Active           = true,
+	Draggable        = true,
+})
+addCorner(tradeMenu, 12)
+addStroke(tradeMenu)
 
-Instance.new("UICorner", tradeMenu).CornerRadius = UDim.new(0,12)
+makeLabel({
+	Parent     = tradeMenu,
+	Size       = UDim2.new(1, 0, 0, 35),
+	Position   = UDim2.new(0, 0, 0, 5),
+	Font       = Enum.Font.GothamBlack,
+	Text       = "Trade Visual Script",
+	TextColor3 = C.WHITE,
+	TextSize   = 18,
+})
 
-local tradeStroke = Instance.new("UIStroke", tradeMenu)
-tradeStroke.Color = Color3.fromRGB(45,45,45)
+makeLabel({
+	Parent           = tradeMenu,
+	Position         = UDim2.new(0, 12, 0, 46),
+	Size             = UDim2.new(0, 160, 0, 16),
+	Font             = Enum.Font.GothamBold,
+	Text             = "PLAYER USERNAME",
+	TextColor3       = C.GRAY,
+	TextSize         = 11,
+	TextXAlignment   = Enum.TextXAlignment.Left,
+})
 
-local tradeTitle = Instance.new("TextLabel")
-tradeTitle.Parent = tradeMenu
-tradeTitle.BackgroundTransparency = 1
-tradeTitle.Size = UDim2.new(1,0,0,35)
-tradeTitle.Position = UDim2.new(0,0,0,5)
-tradeTitle.Font = Enum.Font.GothamBlack
-tradeTitle.Text = "Trade Visual Script"
-tradeTitle.TextColor3 = Color3.new(1,1,1)
-tradeTitle.TextSize = 18
--- PLAYER USERNAME
+local usernameBox = makeTextBox(tradeMenu, {
+	Position        = UDim2.new(0, 12, 0, 65),
+	Size            = UDim2.new(0, 255, 0, 26),
+	PlaceholderText = "enter username...",
+	Text            = "",
+})
 
-local playerLabel = Instance.new("TextLabel")
-playerLabel.Parent = tradeMenu
-playerLabel.BackgroundTransparency = 1
-playerLabel.Position = UDim2.new(0,12,0,76)
-playerLabel.Size = UDim2.new(0,160,0,16)
-playerLabel.Font = Enum.Font.GothamBold
-playerLabel.Text = "PLAYER USERNAME"
-playerLabel.TextColor3 = Color3.fromRGB(120,120,120)
-playerLabel.TextSize = 11
-playerLabel.TextXAlignment = Enum.TextXAlignment.Left
+-- Botão "ME"
+local meBtn = makeButton(tradeMenu, {
+	Position         = UDim2.new(0, 272, 0, 65),
+	Size             = UDim2.new(0, 22, 0, 26),
+	BackgroundColor3 = C.BTN_PURPLE,
+	Text             = "ME",
+	TextSize         = 9,
+})
+-- canto totalmente redondo
+tradeMenu:FindFirstChildWhichIsA("UICorner", true) -- já existe no frame
+local meBtnCorner = Instance.new("UICorner", meBtn)
+meBtnCorner.CornerRadius = UDim.new(1, 0)
 
--- USER INPUT
+local receiveTradeBtn = makeButton(tradeMenu, {
+	Position         = UDim2.new(0, 12, 0, 103),
+	Size             = UDim2.new(1, -24, 0, 32),
+	BackgroundColor3 = Color3.fromRGB(0, 110, 0),
+	Text             = "RECEBER TRADE DESSE PLAYER",
+	TextSize         = 13,
+})
 
-local usernameBox = Instance.new("TextBox")
-usernameBox.Parent = tradeMenu
-usernameBox.Position = UDim2.new(0,12,0,95)
-usernameBox.Size = UDim2.new(1,-24,0,28)
-usernameBox.BackgroundColor3 = Color3.fromRGB(16,16,16)
-usernameBox.PlaceholderText = "enter username..."
-usernameBox.Text = ""
-usernameBox.Font = Enum.Font.GothamBold
-usernameBox.TextColor3 = Color3.new(1,1,1)
-usernameBox.PlaceholderColor3 = Color3.fromRGB(90,90,90)
-usernameBox.TextSize = 12
-usernameBox.ClearTextOnFocus = false
+local forceAcceptBtn = makeButton(tradeMenu, {
+	Position         = UDim2.new(0, 12, 0, 143),
+	Size             = UDim2.new(1, -24, 0, 32),
+	BackgroundColor3 = Color3.fromRGB(120, 0, 0),
+	Text             = "FORÇAR ACEITAR A TRADE",
+	TextSize         = 13,
+})
 
-Instance.new("UICorner", usernameBox).CornerRadius = UDim.new(0,6)
-
--- RECEIVE TRADE BUTTON
-
-local receiveTrade = Instance.new("TextButton")
-receiveTrade.Parent = tradeMenu
-receiveTrade.Position = UDim2.new(0,12,0,135)
-receiveTrade.Size = UDim2.new(1,-24,0,32)
-receiveTrade.BackgroundColor3 = Color3.fromRGB(0,110,0)
-receiveTrade.Text = "RECEBER TRADE DESSE PLAYER"
-receiveTrade.Font = Enum.Font.GothamBlack
-receiveTrade.TextColor3 = Color3.new(1,1,1)
-receiveTrade.TextSize = 13
-receiveTrade.AutoButtonColor = false
-
-Instance.new("UICorner", receiveTrade).CornerRadius = UDim.new(0,6)
-
--- FORCE ACCEPT BUTTON
-
-local forceAccept = Instance.new("TextButton")
-forceAccept.Parent = tradeMenu
-forceAccept.Position = UDim2.new(0,12,0,175)
-forceAccept.Size = UDim2.new(1,-24,0,32)
-forceAccept.BackgroundColor3 = Color3.fromRGB(120,0,0)
-forceAccept.Text = "FORÇAR ACEITAR A TRADE"
-forceAccept.Font = Enum.Font.GothamBlack
-forceAccept.TextColor3 = Color3.new(1,1,1)
-forceAccept.TextSize = 13
-forceAccept.AutoButtonColor = false
-
-Instance.new("UICorner", forceAccept).CornerRadius = UDim.new(0,6)
-
--- STATUS
-
-local tradeStatus = Instance.new("TextLabel")
-tradeStatus.Parent = tradeMenu
-tradeStatus.BackgroundTransparency = 1
-tradeStatus.Position = UDim2.new(0,0,0,215)
-tradeStatus.Size = UDim2.new(1,0,0,18)
-tradeStatus.Font = Enum.Font.GothamBold
-tradeStatus.Text = "waiting..."
-tradeStatus.TextColor3 = Color3.fromRGB(120,255,120)
-tradeStatus.TextSize = 11
-
--- BUTTON FUNCTIONS
-
-receiveTrade.MouseButton1Click:Connect(function()
-	if usernameBox.Text ~= "" then
-		tradeStatus.Text = "trade recebida de "..usernameBox.Text
-	end
-end)
-
-forceAccept.MouseButton1Click:Connect(function()
-	if usernameBox.Text ~= "" then
-		tradeStatus.Text = "trade aceita com "..usernameBox.Text
-	end
-end)
-
-local userLbl = Instance.new("TextLabel")
-userLbl.Parent = tradeMenu
-userLbl.BackgroundTransparency = 1
-userLbl.Position = UDim2.new(0,12,0,76)
-userLbl.Size = UDim2.new(0,160,0,16)
-userLbl.Font = Enum.Font.GothamBold
-userLbl.Text = "PLAYER USERNAME"
-userLbl.TextColor3 = Color3.fromRGB(120,120,120)
-userLbl.TextSize = 11
-userLbl.TextXAlignment = Enum.TextXAlignment.Left
-
-local userBox = Instance.new("TextBox")
-userBox.Parent = tradeMenu
-userBox.Position = UDim2.new(0,12,0,94)
-userBox.Size = UDim2.new(0,255,0,26)
-userBox.BackgroundColor3 = Color3.fromRGB(16,16,16)
-userBox.PlaceholderText = "enter username..."
-userBox.Font = Enum.Font.GothamBold
-userBox.TextColor3 = Color3.new(1,1,1)
-userBox.TextSize = 12
-
-Instance.new("UICorner", userBox).CornerRadius = UDim.new(0,5)
-
-local meBtn = Instance.new("TextButton")
-meBtn.Parent = tradeMenu
-meBtn.Position = UDim2.new(0,272,0,94)
-meBtn.Size = UDim2.new(0,22,0,26)
-meBtn.BackgroundColor3 = Color3.fromRGB(50,40,120)
-meBtn.Text = "ME"
-meBtn.Font = Enum.Font.GothamBlack
-meBtn.TextColor3 = Color3.new(1,1,1)
-meBtn.TextSize = 9
-
-Instance.new("UICorner", meBtn).CornerRadius = UDim.new(1,0)
-
--- DUPE MENU
-
-local dupeMenu = Instance.new("Frame")
-dupeMenu.Parent = gui
-dupeMenu.Size = UDim2.new(0,305,0,220)
-dupeMenu.Position = UDim2.new(0.5,-152,0.5,-110)
-dupeMenu.BackgroundColor3 = Color3.fromRGB(10,10,10)
-dupeMenu.Visible = false
-
-Instance.new("UICorner", dupeMenu).CornerRadius = UDim.new(0,12)
-
-local dupeTitle = Instance.new("TextLabel")
-dupeTitle.Parent = dupeMenu
-dupeTitle.BackgroundTransparency = 1
-dupeTitle.Size = UDim2.new(1,0,0,35)
-dupeTitle.Font = Enum.Font.GothamBlack
-dupeTitle.Text = "DUPE PANEL"
-dupeTitle.TextColor3 = Color3.new(1,1,1)
-dupeTitle.TextSize = 20
-
-local dupeLabel = Instance.new("TextLabel")
-dupeLabel.Parent = dupeMenu
-dupeLabel.BackgroundTransparency = 1
-dupeLabel.Position = UDim2.new(0,12,0,55)
-dupeLabel.Size = UDim2.new(0,220,0,18)
-dupeLabel.Font = Enum.Font.GothamBold
-dupeLabel.Text = "SELECIONE O PET QUE DESEJA DUPAR"
-dupeLabel.TextColor3 = Color3.fromRGB(120,120,120)
-dupeLabel.TextSize = 11
-dupeLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local dupeBox = Instance.new("TextBox")
-dupeBox.Parent = dupeMenu
-dupeBox.Position = UDim2.new(0,12,0,78)
-dupeBox.Size = UDim2.new(1,-24,0,28)
-dupeBox.BackgroundColor3 = Color3.fromRGB(16,16,16)
-dupeBox.PlaceholderText = "Digite o nome do pet..."
-dupeBox.Text = ""
-dupeBox.Font = Enum.Font.GothamBold
-dupeBox.TextColor3 = Color3.new(1,1,1)
-dupeBox.PlaceholderColor3 = Color3.fromRGB(90,90,90)
-dupeBox.TextSize = 12
-dupeBox.ClearTextOnFocus = false
-
-Instance.new("UICorner", dupeBox).CornerRadius = UDim.new(0,6)
-
-local dupeButton = Instance.new("TextButton")
-dupeButton.Parent = dupeMenu
-dupeButton.Position = UDim2.new(0,12,0,120)
-dupeButton.Size = UDim2.new(1,-24,0,32)
-dupeButton.BackgroundColor3 = Color3.fromRGB(0,120,0)
-dupeButton.Text = "INICIAR DUPE"
-dupeButton.Font = Enum.Font.GothamBlack
-dupeButton.TextColor3 = Color3.new(1,1,1)
-dupeButton.TextSize = 14
-
-Instance.new("UICorner", dupeButton).CornerRadius = UDim.new(0,6)
-
-local dupeStatus = Instance.new("TextLabel")
-dupeStatus.Parent = dupeMenu
-dupeStatus.BackgroundTransparency = 1
-dupeStatus.Position = UDim2.new(0,12,0,165)
-dupeStatus.Size = UDim2.new(1,-24,0,35)
-dupeStatus.Font = Enum.Font.GothamBold
-dupeStatus.Text = "Requisitos mínimos: Garama ou pets acima de 1B. Limite máximo: 3 Dragons por execução."
-dupeStatus.TextColor3 = Color3.fromRGB(120,255,120)
-dupeStatus.TextSize = 11
-dupeStatus.TextWrapped = true
-
-dupeButton.MouseButton1Click:Connect(function()
-
-	dupeStatus.Text = "O pet não encontra-se na sua base para duplicar."
-	dupeStatus.TextColor3 = Color3.fromRGB(255,60,60)
-
-end)
-
--- SETTINGS MENU
-
-local settingsMenu = Instance.new("Frame")
-settingsMenu.Parent = gui
-settingsMenu.Size = UDim2.new(0,305,0,220)
-settingsMenu.Position = UDim2.new(0.5,-152,0.5,-110)
-settingsMenu.BackgroundColor3 = Color3.fromRGB(10,10,10)
-settingsMenu.Visible = false
-
-Instance.new("UICorner", settingsMenu).CornerRadius = UDim.new(0,12)
-
-local settingsTitle = Instance.new("TextLabel")
-settingsTitle.Parent = settingsMenu
-settingsTitle.BackgroundTransparency = 1
-settingsTitle.Size = UDim2.new(1,0,0,35)
-settingsTitle.Font = Enum.Font.GothamBlack
-settingsTitle.Text = "SETTINGS"
-settingsTitle.TextColor3 = Color3.new(1,1,1)
-settingsTitle.TextSize = 20
-
--- TAB SYSTEM
-
-local function hideAll()
-	main.Visible = false
-	tradeMenu.Visible = false
-	dupeMenu.Visible = false
-	settingsMenu.Visible = false
-end
-
-spawnTab.MouseButton1Click:Connect(function()
-	hideAll()
-	main.Visible = true
-end)
-
-tradeTab.MouseButton1Click:Connect(function()
-	hideAll()
-	tradeMenu.Visible = true
-end)
-
-dupeTab.MouseButton1Click:Connect(function()
-	hideAll()
-	dupeMenu.Visible = true
-end)
-
-settingsTab.MouseButton1Click:Connect(function()
-	hideAll()
-	settingsMenu.Visible = true
-end)
+local tradeStatus = makeLabel({
+	Parent     = tradeMenu,
+	Position   = UDim2.new(0, 0, 0, 185),
+	Size       = UDim2.new(1, 0, 0, 18),
+	Font       = Enum.Font.GothamBold,
+	Text       = "waiting...",
+	TextColor3 = C.GREEN_TEXT,
+	TextSize   = 11,
+})
 
 meBtn.MouseButton1Click:Connect(function()
-	userBox.Text = game.Players.LocalPlayer.Name
+	usernameBox.Text = game.Players.LocalPlayer.Name
 end)
+
+receiveTradeBtn.MouseButton1Click:Connect(function()
+	local user = usernameBox.Text
+	if user ~= "" then
+		setStatus(tradeStatus, "Trade recebida de " .. user, C.GREEN_TEXT)
+	else
+		setStatus(tradeStatus, "Digite um username primeiro.", C.RED)
+	end
+end)
+
+forceAcceptBtn.MouseButton1Click:Connect(function()
+	local user = usernameBox.Text
+	if user ~= "" then
+		setStatus(tradeStatus, "Trade aceita com " .. user, C.GREEN_TEXT)
+	else
+		setStatus(tradeStatus, "Digite um username primeiro.", C.RED)
+	end
+end)
+
+-- ============================================================
+--  PAINEL DUPE
+-- ============================================================
+
+local dupeMenu = makeFrame({
+	Parent           = gui,
+	Name             = "DupeMenu",
+	Size             = UDim2.new(0, 305, 0, 220),
+	Position         = UDim2.new(0.5, -152, 0.5, -110),
+	BackgroundColor3 = C.BG,
+	Visible          = false,
+	Active           = true,
+	Draggable        = true,
+})
+addCorner(dupeMenu, 12)
+addStroke(dupeMenu)
+
+makeLabel({
+	Parent     = dupeMenu,
+	Size       = UDim2.new(1, 0, 0, 35),
+	Font       = Enum.Font.GothamBlack,
+	Text       = "DUPE PANEL",
+	TextColor3 = C.WHITE,
+	TextSize   = 20,
+})
+
+makeLabel({
+	Parent           = dupeMenu,
+	Position         = UDim2.new(0, 12, 0, 40),
+	Size             = UDim2.new(0, 220, 0, 18),
+	Font             = Enum.Font.GothamBold,
+	Text             = "SELECIONE O PET QUE DESEJA DUPAR",
+	TextColor3       = C.GRAY,
+	TextSize         = 11,
+	TextXAlignment   = Enum.TextXAlignment.Left,
+})
+
+local dupeBox = makeTextBox(dupeMenu, {
+	Position        = UDim2.new(0, 12, 0, 62),
+	Size            = UDim2.new(1, -24, 0, 28),
+	PlaceholderText = "Digite o nome do pet...",
+	Text            = "",
+})
+
+local dupeBtn = makeButton(dupeMenu, {
+	Position         = UDim2.new(0, 12, 0, 100),
+	Size             = UDim2.new(1, -24, 0, 32),
+	BackgroundColor3 = Color3.fromRGB(0, 120, 0),
+	Text             = "INICIAR DUPE",
+	TextSize         = 14,
+})
+
+local dupeStatus = makeLabel({
+	Parent       = dupeMenu,
+	Position     = UDim2.new(0, 12, 0, 143),
+	Size         = UDim2.new(1, -24, 0, 50),
+	Font         = Enum.Font.GothamBold,
+	Text         = "Requisitos mínimos: Garama ou pets acima de 1B. Limite máximo: 3 Dragons por execução.",
+	TextColor3   = C.GREEN_TEXT,
+	TextSize     = 11,
+	TextWrapped  = true,
+})
+
+dupeBtn.MouseButton1Click:Connect(function()
+	if dupeBox.Text ~= "" then
+		setStatus(dupeStatus,
+			"O pet não se encontra na sua base para duplicar.",
+			C.RED)
+	else
+		setStatus(dupeStatus, "Digite o nome do pet primeiro.", C.RED)
+	end
+end)
+
+-- ============================================================
+--  PAINEL SETTINGS
+-- ============================================================
+
+local settingsMenu = makeFrame({
+	Parent           = gui,
+	Name             = "SettingsMenu",
+	Size             = UDim2.new(0, 305, 0, 220),
+	Position         = UDim2.new(0.5, -152, 0.5, -110),
+	BackgroundColor3 = C.BG,
+	Visible          = false,
+	Active           = true,
+	Draggable        = true,
+})
+addCorner(settingsMenu, 12)
+addStroke(settingsMenu)
+
+makeLabel({
+	Parent     = settingsMenu,
+	Size       = UDim2.new(1, 0, 0, 35),
+	Font       = Enum.Font.GothamBlack,
+	Text       = "SETTINGS",
+	TextColor3 = C.WHITE,
+	TextSize   = 20,
+})
+
+-- (adicione suas opções de settings aqui)
+
+-- ============================================================
+--  SISTEMA DE ABAS
+-- ============================================================
+
+local allPanels = { main, tradeMenu, dupeMenu, settingsMenu }
+
+local function hideAll()
+	for _, panel in ipairs(allPanels) do
+		panel.Visible = false
+	end
+end
+
+local function showOnly(panel)
+	hideAll()
+	panel.Visible = true
+end
+
+spawnTab.MouseButton1Click:Connect(function()    showOnly(main) end)
+tradeTab.MouseButton1Click:Connect(function()    showOnly(tradeMenu) end)
+dupeTab.MouseButton1Click:Connect(function()     showOnly(dupeMenu) end)
+settingsTab.MouseButton1Click:Connect(function() showOnly(settingsMenu) end)
+
+-- ── Botão de voltar (compartilhado) ───────────────────────
 local function createBackButton(parent)
-	local back = Instance.new("TextButton")
-	back.Parent = parent
-	back.Size = UDim2.new(0,24,0,24)
-	back.Position = UDim2.new(0,8,0,8)
-	back.BackgroundColor3 = Color3.fromRGB(20,20,20)
-	back.Text = "<"
-	back.Font = Enum.Font.GothamBlack
-	back.TextColor3 = Color3.new(1,1,1)
-	back.TextSize = 16
-	back.AutoButtonColor = false
-
-	Instance.new("UICorner", back).CornerRadius = UDim.new(1,0)
-
+	local back = makeButton(parent, {
+		Size             = UDim2.new(0, 24, 0, 24),
+		Position         = UDim2.new(0, 8, 0, 8),
+		BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+		Text             = "<",
+		TextSize         = 16,
+	})
 	back.MouseButton1Click:Connect(function()
-		tradeMenu.Visible = false
-		dupeMenu.Visible = false
-		settingsMenu.Visible = false
-		main.Visible = true
+		showOnly(main)
 	end)
+	return back
 end
 
 createBackButton(tradeMenu)
 createBackButton(dupeMenu)
 createBackButton(settingsMenu)
-for _,v in pairs(game.CoreGui.TradeVisual.Frame:GetDescendants()) do
-	if v:IsA("TextButton") and v.Text == "SPAWN VISUAL" then
 
-		v.MouseButton1Click:Connect(function()
+-- ============================================================
+--  PAINEL DE MUTATIONS / TRAITS
+-- ============================================================
 
-			local status = game.CoreGui.TradeVisual.Frame:FindFirstChildWhichIsA("TextLabel", true)
+local mutPanel = makeFrame({
+	Parent           = gui,
+	Name             = "MutPanel",
+	Size             = UDim2.new(0, 320, 0, 360),
+	Position         = UDim2.new(0.5, -160, 0.5, -180),
+	BackgroundColor3 = C.BG,
+	Visible          = false,
+	Active           = true,
+	Draggable        = true,
+})
+addCorner(mutPanel, 12)
+addStroke(mutPanel)
 
-			if status then
-				status.Text = "É necessário um pet de tier alto na base. Ex: Garama, Dragon Cannelloni."
-				status.TextColor3 = Color3.fromRGB(255,60,60)
-			end
+makeLabel({
+	Parent     = mutPanel,
+	Size       = UDim2.new(1, 0, 0, 35),
+	Font       = Enum.Font.GothamBlack,
+	Text       = "TRAITS & MUTATIONS",
+	TextColor3 = C.WHITE,
+	TextSize   = 18,
+})
 
-		end)
+-- Status de seleção (declarado aqui, usado dentro do loop)
+local mutStatusLabel = makeLabel({
+	Parent     = mutPanel,
+	Position   = UDim2.new(0, 0, 1, -25),
+	Size       = UDim2.new(1, 0, 0, 18),
+	Font       = Enum.Font.GothamBold,
+	Text       = "0/" .. MAX_MUTATIONS .. " selecionadas",
+	TextColor3 = C.LGRAY,
+	TextSize   = 11,
+})
 
-	end
-end
--- TRAITS PANEL
+-- Botão fechar mutations
+local closeMutBtn = makeButton(mutPanel, {
+	Size             = UDim2.new(0, 24, 0, 24),
+	Position         = UDim2.new(1, -32, 0, 8),
+	BackgroundColor3 = C.BTN_DKRED,
+	Text             = "X",
+	TextSize         = 13,
+})
+local closeCorner = Instance.new("UICorner", closeMutBtn)
+closeCorner.CornerRadius = UDim.new(1, 0)
 
-local selectedMutations = {}
-local maxMutations = 11
+closeMutBtn.MouseButton1Click:Connect(function()
+	mutPanel.Visible = false
+end)
 
-local mutPanel = Instance.new("Frame")
-mutPanel.Parent = gui
-mutPanel.Size = UDim2.new(0,320,0,360)
-mutPanel.Position = UDim2.new(0.5,-160,0.5,-180)
-mutPanel.BackgroundColor3 = Color3.fromRGB(10,10,10)
-mutPanel.Visible = false
-mutPanel.Active = true
-mutPanel.Draggable = true
+traitsBtn.MouseButton1Click:Connect(function()
+	mutPanel.Visible = true
+end)
 
-Instance.new("UICorner", mutPanel).CornerRadius = UDim.new(0,12)
-
-local mutStroke = Instance.new("UIStroke", mutPanel)
-mutStroke.Color = Color3.fromRGB(45,45,45)
-
-local mutTitle = Instance.new("TextLabel")
-mutTitle.Parent = mutPanel
-mutTitle.BackgroundTransparency = 1
-mutTitle.Size = UDim2.new(1,0,0,35)
-mutTitle.Font = Enum.Font.GothamBlack
-mutTitle.Text = "TRAITS & MUTATIONS"
-mutTitle.TextColor3 = Color3.new(1,1,1)
-mutTitle.TextSize = 18
-
-local mutStatus = Instance.new("TextLabel")
-mutStatus.Parent = mutPanel
-mutStatus.BackgroundTransparency = 1
-mutStatus.Position = UDim2.new(0,0,1,-25)
-mutStatus.Size = UDim2.new(1,0,0,18)
-mutStatus.Font = Enum.Font.GothamBold
-mutStatus.Text = "0/11 selecionadas"
-mutStatus.TextColor3 = Color3.fromRGB(180,180,180)
-mutStatus.TextSize = 11
-
+-- ScrollingFrame com grid
 local scroll = Instance.new("ScrollingFrame")
 scroll.Parent = mutPanel
-scroll.Position = UDim2.new(0,10,0,40)
-scroll.Size = UDim2.new(1,-20,1,-75)
-scroll.CanvasSize = UDim2.new(0,0,0,600)
+scroll.Position = UDim2.new(0, 10, 0, 40)
+scroll.Size = UDim2.new(1, -20, 1, -75)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)   -- auto via UIGridLayout
+scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 scroll.BackgroundTransparency = 1
 scroll.BorderSizePixel = 0
 scroll.ScrollBarThickness = 3
 
-local grid = Instance.new("UIGridLayout")
-grid.Parent = scroll
-grid.CellSize = UDim2.new(0,90,0,32)
-grid.CellPadding = UDim2.new(0,6,0,6)
+local grid = Instance.new("UIGridLayout", scroll)
+grid.CellSize    = UDim2.new(0, 90, 0, 32)
+grid.CellPadding = UDim2.new(0, 6, 0, 6)
 
-local mutations = {
-	"Gold",
-	"Diamond",
-	"Rainbow",
-	"Bloodrot",
-	"Candy",
-	"Lava",
-	"Galaxy",
-	"Yin Yang",
-	"Radioactive",
-	"Cursed",
-	"Divine",
-	"Celestial",
-	"Chocolate",
-	"Void",
-	"Toxic",
-	"Darkness",
-	"Lovely",
-	"Christmas",
-	"Crystal",
-	"Heaven",
-	"Neon",
-	"Aqua",
-	"Dreamy",
-	"Carnival",
-	"Zombie",
-	"Halloween",
-	"Frozen",
-	"Lightning",
-	"Glitched",
-	"Fireworks",
-	"Skibidi",
-	"Ice",
-	"Pumpkin",
-	"Halo",
-	"Corrupt",
-	"Ancient",
-	"Shadow",
-	"Fire",
-	"Windy",
-	"Shock"
+local MUTATIONS = {
+	"Gold","Diamond","Rainbow","Bloodrot","Candy","Lava","Galaxy",
+	"Yin Yang","Radioactive","Cursed","Divine","Celestial","Chocolate",
+	"Void","Toxic","Darkness","Lovely","Christmas","Crystal","Heaven",
+	"Neon","Aqua","Dreamy","Carnival","Zombie","Halloween","Frozen",
+	"Lightning","Glitched","Fireworks","Skibidi","Ice","Pumpkin","Halo",
+	"Corrupt","Ancient","Shadow","Fire","Windy","Shock",
 }
 
-for _,name in pairs(mutations) do
-
-	local button = Instance.new("TextButton")
-	button.Parent = scroll
-	button.BackgroundColor3 = Color3.fromRGB(20,20,20)
-	button.Text = "☐ "..name
-	button.Font = Enum.Font.GothamBold
-	button.TextColor3 = Color3.new(1,1,1)
-	button.TextSize = 11
-	button.AutoButtonColor = false
-
-	Instance.new("UICorner", button).CornerRadius = UDim.new(0,6)
-
-	local enabled = false
-
-	button.MouseButton1Click:Connect(function()
-
-		if not enabled and #selectedMutations >= maxMutations then
-			mutStatus.Text = "Limite máximo de 11 mutações."
-			mutStatus.TextColor3 = Color3.fromRGB(255,60,60)
-			return
-		end
-
-		enabled = not enabled
-
-		if enabled then
-
-			table.insert(selectedMutations,name)
-
-			button.Text = "☑ "..name
-			button.BackgroundColor3 = Color3.fromRGB(40,80,40)
-
-		else
-
-			for i,v in pairs(selectedMutations) do
-				if v == name then
-					table.remove(selectedMutations,i)
-				end
-			end
-
-			button.Text = "☐ "..name
-			button.BackgroundColor3 = Color3.fromRGB(20,20,20)
-
-		end
-
-		mutStatus.Text = #selectedMutations.."/11 selecionadas"
-		mutStatus.TextColor3 = Color3.fromRGB(180,180,180)
-
-	end)
-
+-- Atualiza o label e cor do status de mutações
+local function refreshMutStatus()
+	local count = 0
+	for _ in pairs(selectedMutations) do count = count + 1 end
+	mutStatusLabel.Text = count .. "/" .. MAX_MUTATIONS .. " selecionadas"
+	mutStatusLabel.TextColor3 = C.LGRAY
 end
 
-traits.MouseButton1Click:Connect(function()
-	mutPanel.Visible = true
-end)
-local closeMut = Instance.new("TextButton")
-closeMut.Parent = mutPanel
-closeMut.Size = UDim2.new(0,24,0,24)
-closeMut.Position = UDim2.new(1,-32,0,8)
-closeMut.BackgroundColor3 = Color3.fromRGB(120,0,0)
-closeMut.Text = "X"
-closeMut.Font = Enum.Font.GothamBlack
-closeMut.TextColor3 = Color3.new(1,1,1)
-closeMut.TextSize = 13
-closeMut.AutoButtonColor = false
+for _, name in ipairs(MUTATIONS) do
+	local btn = makeButton(scroll, {
+		BackgroundColor3 = C.MUT_OFF,
+		Text             = "☐ " .. name,
+		TextSize         = 11,
+	})
 
-Instance.new("UICorner", closeMut).CornerRadius = UDim.new(1,0)
-
-closeMut.MouseButton1Click:Connect(function()
-	mutPanel.Visible = false
-end)
+	btn.MouseButton1Click:Connect(function()
+		if selectedMutations[name] then
+			-- Desselecionar
+			selectedMutations[name] = nil
+			btn.Text             = "☐ " .. name
+			btn.BackgroundColor3 = C.MUT_OFF
+		else
+			-- Verificar limite
+			local count = 0
+			for _ in pairs(selectedMutations) do count = count + 1 end
+			if count >= MAX_MUTATIONS then
+				setStatus(mutStatusLabel,
+					"Limite máximo de " .. MAX_MUTATIONS .. " mutações.",
+					C.RED)
+				return
+			end
+			-- Selecionar
+			selectedMutations[name] = true
+			btn.Text             = "☑ " .. name
+			btn.BackgroundColor3 = C.MUT_ON
+		end
+		refreshMutStatus()
+	end)
+end
